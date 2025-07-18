@@ -2,65 +2,9 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import os
+import csv
 from urllib.parse import urljoin, urlparse
 import time
-
-def discover_all_links(base_url):
-    """Recursively discover all internal links from the website"""
-    discovered_links = set()
-    to_visit = {base_url}
-    visited = set()
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-    
-    base_domain = urlparse(base_url).netloc
-    
-    while to_visit:
-        print(to_visit)
-        current_url = to_visit.pop()
-        
-        if current_url in visited:
-            continue
-            
-        visited.add(current_url)
-        print(f"Discovering links from: {current_url}")
-        
-        try:
-            response = requests.get(current_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Find all links on this page
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                full_url = urljoin(current_url, href)
-                
-                # Clean the URL (remove fragments and query params if desired)
-                parsed_url = urlparse(full_url)
-                clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                
-                # Only include internal links from the same domain
-                if (parsed_url.netloc == base_domain and 
-                    clean_url.startswith(base_url) and 
-                    clean_url not in discovered_links):
-                    
-                    discovered_links.add(clean_url)
-                    
-                    # Add to visit queue if we haven't visited it yet
-                    if clean_url not in visited:
-                        to_visit.add(clean_url)
-            
-            # Be respectful to the server during discovery
-            time.sleep(0.5)
-            
-        except Exception as e:
-            print(f"Error discovering links from {current_url}: {e}")
-            continue
-    
-    return discovered_links
 
 def scrape_page(url):
     """Scrape a single page"""
@@ -126,58 +70,130 @@ def url_to_filename(url):
     filename = filename.rstrip('._')
     return filename + '.md'
 
-def scrape_entire_website():
-    base_url = "https://www.freedomracing.com/"
+def save_url_to_csv(url, csv_filepath):
+    """Save URL to CSV file"""
+    file_exists = os.path.isfile(csv_filepath)
+    
+    with open(csv_filepath, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        
+        # Write header if file is new
+        if not file_exists:
+            writer.writerow(['url'])
+        
+        writer.writerow([url])
+
+def save_page_content(url, content, output_dir):
+    """Save page content to markdown file"""
+    if content:
+        # Clean the content
+        cleaned_content = clean_content(content)
+        
+        # Create filename
+        filename = url_to_filename(url)
+        filepath = os.path.join(output_dir, filename)
+        
+        # Save to file
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"# {url}\n\n")
+            f.write(cleaned_content)
+        
+        print(f"✓ Saved: {filename}")
+        return True
+    else:
+        print(f"✗ Failed to save: {url}")
+        return False
+
+def discover_and_scrape_website(base_url):
+    """Systematically discover and scrape website pages"""
     output_dir = "freedomracingdata"
+    csv_filepath = os.path.join(output_dir, "discovered_links.csv")
     
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
-    # Discover all links recursively
-    print("Discovering all pages recursively...")
-    all_links = discover_all_links(base_url)
-    print(f"Found {len(all_links)} unique pages to scrape")
-    
-    # Save the discovered links to a file for reference
-    with open(os.path.join(output_dir, "discovered_links.txt"), "w", encoding="utf-8") as f:
-        for link in sorted(all_links):
-            f.write(link + "\n")
-    
+    # Initialize tracking sets and queue
+    to_visit = {base_url}
+    visited = set()
     scraped_count = 0
     failed_count = 0
     
-    for url in all_links:
-        print(f"Scraping ({scraped_count + 1}/{len(all_links)}): {url}")
-        
-        # Scrape the page
-        content = scrape_page(url)
-        
-        if content:
-            # Clean the content
-            cleaned_content = clean_content(content)
-            
-            # Create filename
-            filename = url_to_filename(url)
-            filepath = os.path.join(output_dir, filename)
-            
-            # Save to file
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(f"# {url}\n\n")
-                f.write(cleaned_content)
-            
-            scraped_count += 1
-            print(f"✓ Saved: {filename}")
-        else:
-            failed_count += 1
-            print(f"✗ Failed to scrape: {url}")
-        
-        # Be respectful to the server
-        time.sleep(0.5)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
     
-    print(f"\nScraping complete!")
+    base_domain = urlparse(base_url).netloc
+    
+    print("Starting systematic website crawl and scrape...")
+    
+    while to_visit:
+        current_url = to_visit.pop()
+        
+        if current_url in visited:
+            continue
+            
+        visited.add(current_url)
+        print(f"\nProcessing page {len(visited)}: {current_url}")
+        
+        try:
+            # Step 1: Scrape the current page
+            content = scrape_page(current_url)
+            
+            # Step 2: Save the page content to markdown file
+            if save_page_content(current_url, content, output_dir):
+                scraped_count += 1
+            else:
+                failed_count += 1
+            
+            # Step 3: Save URL to CSV file
+            save_url_to_csv(current_url, csv_filepath)
+            
+            # Step 4: Discover new links from this page for continued systematic search
+            response = requests.get(current_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find all links on this page
+            new_links_found = 0
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                full_url = urljoin(current_url, href)
+                
+                # Clean the URL (remove fragments and query params)
+                parsed_url = urlparse(full_url)
+                clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                
+                # Only include internal links from the same domain
+                if (parsed_url.netloc == base_domain and 
+                    clean_url.startswith(base_url) and 
+                    clean_url not in visited and
+                    clean_url not in to_visit):
+                    
+                    to_visit.add(clean_url)
+                    new_links_found += 1
+            
+            print(f"   Found {new_links_found} new links to visit")
+            print(f"   Queue size: {len(to_visit)}")
+            
+            # Be respectful to the server
+            time.sleep(0.5)
+            
+        except Exception as e:
+            print(f"Error processing {current_url}: {e}")
+            failed_count += 1
+            # Still save the URL to CSV even if scraping failed
+            save_url_to_csv(current_url, csv_filepath)
+            continue
+    
+    print(f"\n{'='*50}")
+    print(f"Systematic crawl and scrape complete!")
     print(f"Successfully scraped: {scraped_count} pages")
     print(f"Failed to scrape: {failed_count} pages")
-    print(f"Total pages discovered: {len(all_links)}")
+    print(f"Total pages discovered: {len(visited)}")
+    print(f"All URLs saved to: {csv_filepath}")
+    print(f"All content saved to: {output_dir}/")
 
 if __name__ == "__main__":
-    scrape_entire_website()
+    base_url = "https://www.freedomracing.com/"
+    discover_and_scrape_website(base_url)
