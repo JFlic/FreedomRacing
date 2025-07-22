@@ -199,6 +199,7 @@ app.add_middleware(
         "https://questionroddixon.com",
         "http://localhost:3000",
         "https://lamoni-rod-wigit.vercel.app",
+        "https://freedom-racing-el7kk1eed-jacks-projects-7206e0db.vercel.app",
         "https://*.vercel.app",
     ],
     allow_credentials=True,
