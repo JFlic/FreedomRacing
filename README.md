@@ -39,3 +39,8 @@ Basic MVP 7,000 - 15,0000 plus upkeep
 
 Monthly subscription
 Basic MVP 500 - 1,500 comes along with upkeep
+
+
+#Webscrape
+
+We need to skip urls with https://www.freedomracing.com/review/product/view, and customer account login in them because they don't hold any information and just bog down the webscrape
