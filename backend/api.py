@@ -200,6 +200,7 @@ app.add_middleware(
         "http://localhost:3000",
         "https://lamoni-rod-wigit.vercel.app",
         "https://freedom-racing-el7kk1eed-jacks-projects-7206e0db.vercel.app",
+        "https://freedom-racing-*.vercel.app",
         "https://*.vercel.app",
     ],
     allow_credentials=True,
