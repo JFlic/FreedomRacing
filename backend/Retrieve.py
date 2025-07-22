@@ -210,7 +210,7 @@ async def process_query(query: str) -> Dict[str, Any]:
             # Perform similarity search
             vector_start = time.time()
             print(f"DEBUG: About to perform vector search with query: {search_query}")
-            results = vector_db.similarity_search(search_query, k=3)
+            results = vector_db.similarity_search(search_query, k=5)
             vector_end = time.time()
             for result in results:
                 print(Document(page_content=result['content']))
